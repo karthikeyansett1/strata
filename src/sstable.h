@@ -21,6 +21,7 @@ class SSTable {
   Status Open(const std::filesystem::path& path, const TableMetadata& metadata,
               std::uint64_t max_sequence);
   Status Get(std::string_view key, std::optional<Entry>* out) const;
+  Status ReadAll(Rows* out) const;
   Status ReadRange(std::string_view start, std::string_view end, Rows* out) const;
 
  private:

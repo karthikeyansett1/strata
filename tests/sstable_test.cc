@@ -13,6 +13,7 @@
 #include "bloom.h"
 #include "strata/db.h"
 #include "temp_directory.h"
+#include "wal.h"
 
 namespace strata {
 namespace {
@@ -53,8 +54,12 @@ TEST(SSTables, ShadowsAcrossTablesAndRecoversTheActiveWal) {
   std::string value;
   EXPECT_EQ(db->Get("key", &value).code(), StatusCode::kNotFound);
   ASSERT_TRUE(db->Flush().ok());
-  ASSERT_TRUE(db->Put("wal-only", "live").ok());
   db.reset();
+  {
+    Wal wal;
+    ASSERT_TRUE(wal.Open(directory.path, 5, false).ok());
+    ASSERT_TRUE(wal.Append("wal-only", "live", RecordType::kPut, 5).ok());
+  }
 
   ASSERT_TRUE(DB::Open({}, directory.path, &db).ok());
   EXPECT_EQ(db->Get("key", &value).code(), StatusCode::kNotFound);
@@ -75,6 +80,7 @@ TEST(SSTables, RandomizedScansMatchOrderedMapThroughAutomaticRotation) {
   Options options;
   options.block_bytes = 85;
   options.memtable_bytes = 400;
+  options.l0_compaction_trigger = 1000;
   std::unique_ptr<DB> db;
   ASSERT_TRUE(DB::Open(options, directory.path, &db).ok());
   std::map<std::string, std::string> expected;
@@ -178,9 +184,11 @@ TEST(SSTables, RotatingWalKeepsReadersAndTheDirectoryLockConsistent) {
 TEST(SSTables, IgnoresOrphansBeforeManifestAndRejectsMissingCommittedWal) {
   test::TempDirectory directory;
   std::unique_ptr<DB> db;
-  ASSERT_TRUE(DB::Open({}, directory.path, &db).ok());
-  ASSERT_TRUE(db->Put("key", "acknowledged").ok());
-  db.reset();
+  {
+    Wal wal;
+    ASSERT_TRUE(wal.Open(directory.path).ok());
+    ASSERT_TRUE(wal.Append("key", "acknowledged", RecordType::kPut, 1).ok());
+  }
 
   std::ofstream(directory.path + "/sst-1.sst") << "orphan";
   std::ofstream(directory.path + "/MANIFEST.tmp") << "incomplete";

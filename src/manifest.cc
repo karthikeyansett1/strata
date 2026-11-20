@@ -4,7 +4,8 @@
 
 namespace strata {
 namespace {
-constexpr std::uint32_t kMagic = 0x314d5453;
+constexpr std::uint32_t kMagicV1 = 0x314d5453;
+constexpr std::uint32_t kMagicV2 = 0x324d5453;
 constexpr std::uint64_t kMaxManifestBytes = 256 * 1024 * 1024;
 }  // namespace
 
@@ -30,9 +31,12 @@ Status Manifest::Load(const std::filesystem::path& directory) {
   Manifest loaded;
   std::uint32_t magic;
   std::uint64_t count;
-  if (!disk::Unseal(&data) || !disk::Take(&data, &magic) || magic != kMagic ||
-      !disk::Take(&data, &loaded.sequence) || !disk::Take(&data, &loaded.next_file) ||
-      !disk::Take(&data, &loaded.wal_start) || !disk::Take(&data, &count) || count == 0 ||
+  if (!disk::Unseal(&data) || !disk::Take(&data, &magic) ||
+      (magic != kMagicV1 && magic != kMagicV2) || !disk::Take(&data, &loaded.sequence) ||
+      !disk::Take(&data, &loaded.next_file) || !disk::Take(&data, &loaded.wal_start) ||
+      (magic == kMagicV2 && !disk::Take(&data, &loaded.next_wal_start)) ||
+      !disk::Take(&data, &count) || (magic == kMagicV1 && count == 0) ||
+      (loaded.next_wal_start != 0 && loaded.next_wal_start <= loaded.wal_start) ||
       count > data.size() / 20 || loaded.sequence == std::numeric_limits<std::uint64_t>::max() ||
       loaded.wal_start != loaded.sequence + 1) {
     return disk::Corruption("invalid manifest header");
@@ -43,8 +47,8 @@ Status Manifest::Load(const std::filesystem::path& directory) {
     TableMetadata table{};
     if (!disk::Take(&data, &table.id) || !disk::Take(&data, &table.level) ||
         !disk::TakeString(&data, &table.smallest) || !disk::TakeString(&data, &table.largest) ||
-        table.id <= previous || table.id >= loaded.next_file || table.level != 0 ||
-        table.smallest > table.largest) {
+        table.id <= previous || table.id >= loaded.next_file ||
+        table.level > (magic == kMagicV1 ? 0u : 1u) || table.smallest > table.largest) {
       return disk::Corruption("invalid manifest table");
     }
     previous = table.id;
@@ -60,10 +64,11 @@ Status Manifest::Load(const std::filesystem::path& directory) {
 Status Manifest::Save(const std::filesystem::path& directory,
                       const disk::File& directory_fd) const {
   std::string bytes;
-  disk::Add(&bytes, kMagic);
+  disk::Add(&bytes, kMagicV2);
   disk::Add(&bytes, sequence);
   disk::Add(&bytes, next_file);
   disk::Add(&bytes, wal_start);
+  disk::Add(&bytes, next_wal_start);
   disk::Add(&bytes, static_cast<std::uint64_t>(tables.size()));
   for (const auto& table : tables) {
     disk::Add(&bytes, table.id);

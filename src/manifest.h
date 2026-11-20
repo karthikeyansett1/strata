@@ -17,6 +17,7 @@ struct Manifest {
   std::uint64_t sequence = 0;
   std::uint64_t next_file = 1;
   std::uint64_t wal_start = 1;
+  std::uint64_t next_wal_start = 0;
   std::vector<TableMetadata> tables;
 
   Status Load(const std::filesystem::path& directory);

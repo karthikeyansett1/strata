@@ -20,4 +20,4 @@ build/strata_cli ./data get sample
 build/strata_cli ./data del sample
 ```
 
-The CLI returns exit code 3 for a missing key. Each successful write syncs the WAL to disk. The engine flushes the memtable to immutable SSTables, then atomically updates the manifest. On open, it loads the table metadata and replays the active WAL. The C++ API exposes `Flush()` and half-open `Scan(start, end)` ranges.
+The CLI returns exit code 3 for a missing key. Successful writes are acknowledged after WAL sync. The C++ API supports per-write sync or group commit. The engine flushes memtables and compacts immutable SSTables in the background. On open, it loads the manifest and replays the referenced WALs. The API exposes `Flush()`, `CompactAll()`, and half-open `Scan(start, end)` ranges.
