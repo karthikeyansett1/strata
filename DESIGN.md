@@ -106,3 +106,17 @@ The graph draws a geometric layer count with continuation probability 1/M. Inser
 The evaluation used the first 100,000 AG News training titles and the first 200 test titles, with disjoint splits and 384-dimensional embeddings. It ran the model publisher's ARM64 int8 ONNX export of `sentence-transformers/all-MiniLM-L6-v2`, at revision `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`. Titles were truncated to 24 tokens, mean-pooled with the attention mask, and normalized. The model and dataset are downloaded into an ignored cache. [Model exports](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/tree/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/onnx) · [AG News dataset paper](https://proceedings.neurips.cc/paper/5782-character-level-convolutional-networks-for-text-clasclas-sification.pdf)
 
 Search ran single-threaded on the ARM64 Linux VM, timing in-memory C++ indexes through the same NumPy binding. Recall is mean overlap with exact top-10 labels, and speedup divides exact latency by graph latency. At ef_search=64, recall@10 was 97.45% with a 20.18× speedup. The result CSV includes all tested search budgets, mean latency, and graph-build time. The retrieval demo uses the same model family to select passages from a local corpus after reopening the database, and returns an extractive answer with source IDs.
+
+## Recovery walkthrough and tradeoffs
+
+| Interruption | State found on reopen |
+|---|---|
+| During a WAL append | Recovery replays complete valid records, truncates a torn active tail, and syncs the repair before accepting new writes. A complete unacknowledged write can survive. |
+| During WAL rotation | Until the two-WAL manifest is durable, the old WAL is authoritative. Once that manifest is durable, both generations are replayed. The immutable WAL is checked against the recorded sequence boundary. |
+| During an SSTable flush | The immutable WAL remains live until the new manifest references the durable SSTable. An unreferenced table is ignored and recovery can retry the flush. |
+| During compaction | The prior manifest keeps its original tables live until the compacted result and replacement manifest are durable. After publication, old snapshots keep their tables pinned until their readers exit. |
+| During a manifest update | The temporary manifest is synced before rename, and the directory is synced before obsolete files are unlinked. Recovery reads the active manifest and validates its checksum and metadata. |
+
+The LSM design turns writes into WAL appends and staged sorted runs. It favors sequential I/O and supports background cleanup, with extra work for lookups across runs and write amplification during compaction. A B-tree instead maintains an ordered index in place, which can reduce the number of structures consulted by reads while requiring more page-level mutation on the write path. Strata uses Bloom filters and block indexes to reduce the read cost of overlapping runs.
+
+Per-write sync favors isolated writes that need an immediate sync attempt. Group commit adds a bounded collection interval and shares a sync across concurrent writers. Both modes acknowledge only after the WAL sync succeeds. Group commit trades the collection delay for fewer syncs when there is concurrent write traffic.

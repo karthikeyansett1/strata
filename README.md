@@ -2,79 +2,132 @@
 
 [![CI](https://github.com/karthikeyansett1/strata/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/karthikeyansett1/strata/actions/workflows/ci.yml)
 
-Strata is a C++20 storage engine for Linux. Its current API supports concurrent point reads and writes, deletes, ordered range scans, and recovery from checksummed SSTables and a write-ahead log. The project is building toward an LSM tree with an epoll server, HNSW vector search, and Python bindings.
+Strata is a crash-safe, multithreaded C++20 LSM storage engine for Linux. It provides concurrent key-value reads, ordered range scans, durable writes with optional group commit, and persistent HNSW vector search. Use it from C++, Python, the local CLI, or a pipelined TCP server backed by epoll.
 
-Build the library and CLI and run the tests. On macOS, the wrapper uses Docker to run on Ubuntu.
+## Architecture
 
-```sh
-./scripts/dev.sh bash -ec 'cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build --output-on-failure'
+```mermaid
+flowchart LR
+    CLI[Local CLI] --> KV[Key-value engine]
+    PY[Python bindings] --> KV
+    TCP[epoll TCP server] --> Workers[Request workers] --> KV
+    PY --> Vector[Vector store]
+    Workers --> Vector
+    Vector --> HNSW[In-memory HNSW]
+    Vector --> PrivateKV[Separate key-value namespace]
+    KV --> LSM[WAL, memtables, SSTables and manifest]
+    PrivateKV --> LSM
 ```
 
-If Colima provides Docker, set `DOCKER_CONTEXT=colima` when invoking the wrapper. Configure separate build directories with `-DSTRATA_ASAN=ON` or `-DSTRATA_TSAN=ON` to test with either sanitizer.
+### Write path
 
-Try the CLI after building. On macOS, prefix these commands with `./scripts/dev.sh`.
-
-```sh
-build/strata_cli ./data put sample 'hello Strata'
-build/strata_cli ./data get sample
-build/strata_cli ./data del sample
+```mermaid
+flowchart LR
+    Request[Write request] --> Queue[Writer queue]
+    Queue --> WAL[Append to WAL]
+    WAL --> Sync[Sync WAL once per write or group]
+    Sync --> Active[Publish in active memtable]
+    Active --> Ack[Acknowledge caller]
+    Active -->|Rotation| Frozen[Immutable memtable]
+    Frozen --> Flush[Background SSTable flush]
+    Flush --> Manifest[Install durable manifest]
+    Manifest --> Retire[Retire obsolete WAL]
 ```
 
-The CLI returns exit code 3 for a missing key. Successful writes are acknowledged after WAL sync. The C++ API supports per-write sync or group commit. The engine flushes memtables and compacts immutable SSTables in the background. On open, it loads the manifest and replays the referenced WALs. The API exposes `Flush()`, `CompactAll()`, and half-open `Scan(start, end)` ranges.
+### Read path
 
-## TCP server
-
-Start the Linux server with the build above.
-
-```sh
-build/strata_server --port 7379 --data-dir ./data --sync-mode batch --threads 4
+```mermaid
+flowchart LR
+    Query[Point read] --> Version[Capture reader version]
+    Version --> Active[Active memtable]
+    Active -->|Miss| Frozen[Immutable memtable]
+    Frozen -->|Miss| SST[Newest to oldest SSTables]
+    SST --> Filter[Bloom filter and indexed block]
+    Active -->|Hit or tombstone| Result[Value or not found]
+    Frozen -->|Hit or tombstone| Result
+    Filter --> Result
 ```
 
-Connect over TCP and send newline-terminated `PUT key value`, `GET key`, `DEL key`, `SCAN start end`, or `STATS` commands. Requests may be pipelined. `SCAN` and `STATS` finish with an `END` line.
+Range scans merge sorted rows from the snapshot and return the newest value for each live key in the half-open range `[start, end)`. The [design notes](DESIGN.md) describe the formats, locking, and recovery protocol.
 
-## Verification and measurements
+## Quickstart
 
-Build in Release mode before running the benchmark and crash harness on Linux.
+From a fresh checkout, build the CLI, server, and Python module and run both test suites with one command.
 
 ```sh
-cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build-release
-./scripts/run_bench.sh build-release/strata_bench 20000 results/bench.csv
-python3 scripts/plot_bench.py results/bench.csv
-./scripts/crash_torture.sh
+./scripts/dev.sh ./scripts/verify.sh
 ```
 
-Run the commands through `./scripts/dev.sh` on macOS. The container includes Matplotlib for the charts. See the [benchmark CSV](results/bench.csv), [throughput](results/throughput.png), [p99 latency](results/latency.png), and [crash-test summary](results/torture.log).
+On macOS the wrapper uses Docker. Set `DOCKER_CONTEXT=colima` when Colima provides Docker. On native Ubuntu, install `build-essential cmake ninja-build git pybind11-dev python3-dev python3-numpy` before running the command. The build is written to `build-verify`.
 
-The Phase 4 run covered 32 benchmark cases with 20,000 operations per case. On the eight-thread mixed workload, group commit delivered 37,540 ops/s at 610 µs p99, compared with 12,466 ops/s at 5,307 µs p99 in per-write sync mode. The crash run verified 11,546 acknowledged writes across 500 SIGKILL cycles and lost zero.
+Use the local CLI against a directory that the server and Python bindings have released.
 
-## Vector search and Python
+```sh
+build-verify/strata_cli ./data put sample 'hello Strata'
+build-verify/strata_cli ./data get sample
+build-verify/strata_cli ./data del sample
+```
 
-The TCP server also accepts `VPUT id 0.1,0.2,0.3` and `VSEARCH 5 0.1,0.2,0.3`. Vector results are returned in ascending distance order, followed by `END`. A database's vector dimension is fixed by its first vector.
+Start the TCP server on Linux and connect from a second terminal.
 
-On Linux, build the Python extension with CMake and pybind11 or install the wheel from the source checkout with `python -m pip install .`. The import name is `strata`.
+```sh
+build-verify/strata_server --port 7379 --data-dir ./server-data --sync-mode batch --threads 4
+printf 'PUT sample hello\nGET sample\nSTATS\n' | nc 127.0.0.1 7379
+```
+
+The protocol accepts `PUT`, `GET`, `DEL`, `SCAN`, `STATS`, `VPUT`, and `VSEARCH`. Requests may be pipelined. `SCAN`, `STATS`, and `VSEARCH` finish with `END`. Vector commands take comma-separated coordinates, as in `VPUT example 0.0,1.0` and `VSEARCH 1 0.0,1.0`. The Docker development wrapper runs commands inside an isolated container. Run network examples inside that container or publish the server port explicitly when starting Docker.
+
+On Linux, use `PYTHONPATH=build-verify python3` with the CMake build or install the extension from source with `python -m pip install .`.
 
 ```python
 from strata import DB
 
-db = DB("./data")
+db = DB("./python-data")
 db.put("doc/wal", "The WAL is synced before a write is acknowledged.")
 db.vput("wal", [0.0, 1.0, 0.0])
 print(db.vsearch([0.0, 1.0, 0.0], 1))
 ```
 
-Use `raw=True` on `get`, `scan`, or `vsearch` for binary values or IDs. The Python constructor also accepts `metric`, `m`, `ef_construction`, and `ef_search` keyword arguments.
+Python exposes `metric`, `m`, `ef_construction`, and `ef_search` on the constructor. Pass `raw=True` to `get`, `scan`, or `vsearch` for binary results.
 
-Run the benchmark and the extractive retrieval demo using the Linux development wrapper on macOS.
+## Measured results
+
+These measurements were collected on an ARM64 Linux VM. Times and throughput depend on the hardware and workload.
+
+| Measurement | Result |
+|---|---:|
+| Server SIGKILL cycles | 500 |
+| Acknowledged writes verified / lost | 11,546 / 0 |
+| Eight-thread mixed workload, per-write sync | 12,466 ops/s, 5,307 µs p99 |
+| Eight-thread mixed workload, group commit | 37,540 ops/s, 610 µs p99 |
+| Single-thread random reads, software → hardware CRC32C | 81,254 → 275,511 median ops/s |
+| HNSW at ef_search=64, 100,000 vectors and 200 held-out queries | 97.45% recall@10, 20.18× exact-search speedup |
+
+![Throughput by workload and thread count](results/throughput.png)
+
+![p99 latency by workload and thread count](results/latency.png)
+
+The [benchmark CSV](results/bench.csv), [crash log](results/torture.log), and [vector evaluation](results/vector_eval.csv) contain the underlying results. See the [profiling procedure](DESIGN.md#random-read-profile) for before-and-after runs.
+
+### Reproduce the runs
+
+Use the Release binaries built by the verification command. On macOS, run the commands within the Linux wrapper. Native Linux needs Matplotlib to generate the charts.
 
 ```sh
-cmake -S . -B build-python -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTRATA_BUILD_PYTHON=ON
-cmake --build build-python --target strata_python
+./scripts/run_bench.sh build-verify/strata_bench 20000 results/bench.csv
+python3 scripts/plot_bench.py results/bench.csv
+./scripts/crash_torture.sh --server build-verify/strata_server --client build-verify/torture_client
+
 python3 -m venv build-vector-cache/venv
 build-vector-cache/venv/bin/pip install -r python/evaluation-requirements.txt
 build-vector-cache/venv/bin/python scripts/vector_data.py
-PYTHONPATH=build-python build-vector-cache/venv/bin/python scripts/vector_eval.py
-PYTHONPATH=build-python build-vector-cache/venv/bin/python python/examples/rag_demo.py
+PYTHONPATH=build-verify build-vector-cache/venv/bin/python scripts/vector_eval.py
+PYTHONPATH=build-verify build-vector-cache/venv/bin/python python/examples/rag_demo.py
 ```
 
-On the ARM64 Linux VM, 100,000 MiniLM vectors and 200 held-out queries produced 97.45% recall@10 and a 20.18× speedup over exact search at `ef_search=64`. [Vector evaluation CSV](results/vector_eval.csv)
+## Limitations
+
+- Strata is a single-node engine. Each database directory has an exclusive open lock. The TCP protocol is plaintext, unauthenticated, and intended for a trusted network.
+- Compaction merges all live tables into one level-1 table and materializes their rows in memory. Range scans also materialize their results.
+- Vector data uses one dimension per store. The in-memory HNSW graph rebuilds on open and after replacing an ID. Vector and ordinary key-value writes commit independently.
+- The crash harness kills the server process while the OS and disk stay running. Its results measure process-crash recovery. Durability also depends on the filesystem and device honoring sync.
