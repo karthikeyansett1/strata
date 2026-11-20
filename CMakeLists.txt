@@ -28,6 +28,24 @@ add_executable(strata_cli tools/strata_cli.cc)
 target_link_libraries(strata_cli PRIVATE strata)
 target_compile_options(strata_cli PRIVATE -Wall -Wextra -Werror)
 
+add_library(strata_tcp STATIC src/server/protocol.cc src/server/server.cc)
+target_include_directories(strata_tcp PUBLIC src)
+target_link_libraries(strata_tcp PUBLIC strata PRIVATE Threads::Threads)
+target_compile_options(strata_tcp PRIVATE -Wall -Wextra -Werror)
+
+add_executable(strata_server tools/strata_server_main.cc)
+target_link_libraries(strata_server PRIVATE strata_tcp Threads::Threads)
+target_compile_options(strata_server PRIVATE -Wall -Wextra -Werror)
+
+add_executable(strata_bench tools/strata_bench.cc)
+target_link_libraries(strata_bench PRIVATE strata Threads::Threads)
+target_compile_options(strata_bench PRIVATE -Wall -Wextra -Werror)
+
+add_executable(torture_client tools/torture_client.cc)
+target_include_directories(torture_client PRIVATE src)
+target_link_libraries(torture_client PRIVATE strata)
+target_compile_options(torture_client PRIVATE -Wall -Wextra -Werror)
+
 include(CTest)
 if(BUILD_TESTING)
   include(FetchContent)
@@ -44,13 +62,14 @@ if(BUILD_TESTING)
     tests/db_test.cc
     tests/memtable_test.cc
     tests/recovery_test.cc
+    tests/server_test.cc
     tests/skiplist_test.cc
     tests/sstable_test.cc
     tests/thread_pool_test.cc
     tests/wal_test.cc
   )
   target_include_directories(strata_test PRIVATE src)
-  target_link_libraries(strata_test PRIVATE strata GTest::gtest_main)
+  target_link_libraries(strata_test PRIVATE strata_tcp GTest::gtest_main)
   target_compile_options(strata_test PRIVATE -Wall -Wextra -Werror)
   add_test(NAME strata_test COMMAND strata_test)
   set_tests_properties(strata_test PROPERTIES TIMEOUT 300)
