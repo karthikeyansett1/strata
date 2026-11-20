@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Threads REQUIRED)
-add_library(strata STATIC src/crc32c.cc src/db.cc src/wal.cc)
+add_library(strata STATIC src/crc32c.cc src/db.cc src/manifest.cc src/sstable.cc src/wal.cc)
 target_include_directories(strata PUBLIC include)
 target_link_libraries(strata PRIVATE Threads::Threads)
 target_compile_options(strata PRIVATE -Wall -Wextra -Werror)
@@ -43,6 +43,7 @@ if(BUILD_TESTING)
     tests/memtable_test.cc
     tests/recovery_test.cc
     tests/skiplist_test.cc
+    tests/sstable_test.cc
     tests/wal_test.cc
   )
   target_include_directories(strata_test PRIVATE src)

@@ -213,7 +213,9 @@ Wal::~Wal() {
   }
 }
 
-Status Wal::Open(const std::string& path) {
+std::string Wal::FileName(std::uint64_t start) { return "wal-" + std::to_string(start) + ".log"; }
+
+Status Wal::Open(const std::string& path, std::uint64_t start, bool create) {
   std::error_code error;
   std::filesystem::create_directory(path, error);
   if (error) {
@@ -224,10 +226,14 @@ Status Wal::Open(const std::string& path) {
   if (directory.get() < 0) {
     return IoError("open database directory", errno);
   }
-  FileDescriptor file(openat(directory.get(), kFileName,
-                             O_CREAT | O_RDWR | O_APPEND | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK,
-                             0600));
+  const auto name = FileName(start);
+  const int flags = O_RDWR | O_APPEND | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK;
+  FileDescriptor file(
+      openat(directory.get(), name.c_str(), create ? flags | O_CREAT : flags, 0600));
   if (file.get() < 0) {
+    if (!create && errno == ENOENT) {
+      return {StatusCode::kCorruption, "manifest references a missing WAL"};
+    }
     return IoError("open WAL", errno);
   }
 
@@ -259,8 +265,20 @@ Status Wal::Open(const std::string& path) {
   if (auto status = Sync(parent.get(), "sync parent directory"); !status.ok()) {
     return status;
   }
+  start_ = start;
   fd_ = file.Release();
   return {};
+}
+
+Status Wal::RequireEmpty() const {
+  struct stat info {};
+  if (fstat(fd_, &info) != 0) {
+    return IoError("stat new WAL", errno);
+  }
+  if (info.st_size != 0) {
+    return {StatusCode::kCorruption, "replacement WAL is not empty"};
+  }
+  return Sync(fd_, "sync new WAL");
 }
 
 Status Wal::Recover(const Replay& replay, std::uint64_t* last_sequence) {
@@ -271,7 +289,7 @@ Status Wal::Recover(const Replay& replay, std::uint64_t* last_sequence) {
 
   const auto end = static_cast<std::uint64_t>(info.st_size);
   std::uint64_t offset = 0;
-  std::uint64_t sequence = 0;
+  std::uint64_t sequence = start_ - 1;
   std::array<char, kHeaderBytes> header;
   std::string bytes;
   while (end - offset >= kHeaderBytes) {

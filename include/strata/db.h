@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "strata/options.h"
 #include "strata/status.h"
@@ -23,6 +25,9 @@ class DB {
   [[nodiscard]] Status Put(std::string_view key, std::string_view value) noexcept;
   [[nodiscard]] Status Get(std::string_view key, std::string* value) noexcept;
   [[nodiscard]] Status Delete(std::string_view key) noexcept;
+  [[nodiscard]] Status Flush() noexcept;
+  [[nodiscard]] Status Scan(std::string_view start, std::string_view end,
+                            std::vector<std::pair<std::string, std::string>>* out) noexcept;
   ~DB();
 
  private:
