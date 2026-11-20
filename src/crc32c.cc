@@ -35,8 +35,7 @@ std::uint32_t Software(std::string_view bytes) noexcept {
 }
 
 #if defined(__x86_64__)
-__attribute__((target("sse4.2")))
-std::uint32_t Hardware(std::string_view bytes) noexcept {
+__attribute__((target("sse4.2"))) std::uint32_t Hardware(std::string_view bytes) noexcept {
   std::uint64_t crc = 0xffffffffu;
   while (bytes.size() >= sizeof(std::uint64_t)) {
     std::uint64_t word;
@@ -50,8 +49,7 @@ std::uint32_t Hardware(std::string_view bytes) noexcept {
   return static_cast<std::uint32_t>(crc) ^ 0xffffffffu;
 }
 #elif defined(__aarch64__) && defined(__linux__) && defined(__AARCH64EL__)
-__attribute__((target("+crc")))
-std::uint32_t Hardware(std::string_view bytes) noexcept {
+__attribute__((target("+crc"))) std::uint32_t Hardware(std::string_view bytes) noexcept {
   std::uint32_t crc = 0xffffffffu;
   while (bytes.size() >= sizeof(std::uint64_t)) {
     std::uint64_t word;

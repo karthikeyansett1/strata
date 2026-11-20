@@ -84,3 +84,11 @@ The text protocol accepts LF and CRLF, space-delimited keys, and values with spa
 The benchmark times direct C++ database calls with 16-byte keys and 100-byte values. The timed interval excludes seeding and clean shutdown. Random keys and operation streams are deterministic for a given thread count. Reads and mixed workloads preload up to 10,000 keys. Mixed workers alternate reads and writes with opposite starting phases. The matrix covers all four workloads, both sync modes, and 1, 2, 4, and 8 threads. The command defaults to 1,000,000 operations per case. The published matrix uses 20,000 per case in the two-vCPU Linux VM with database files on its local virtual disk.
 
 The crash harness alternates sync modes across ephemeral loopback servers using one database. It waits for the client to append a key after reading `OK`, samples a seeded delay, and sends SIGKILL to the server. It verifies the previous cycle's acknowledged keys and their values after each restart and rechecks the complete acknowledgement set at the final restart. This exercises process crashes with the kernel and virtual disk still running.
+
+### Random-read profile
+
+On the ARM64 Ubuntu VM, `scripts/profile_reads.sh` sampled `cpu-clock:u` at 499 Hz with Linux perf. The byte-at-a-time CRC32C routine accounted for 78.68% of user-space samples. The implementation now uses ARMv8 CRC32C or x86 SSE4.2 when the CPU advertises support, with a software fallback. File formats and checksums are unchanged. An independent bitwise test covers unaligned inputs and partial words.
+
+Three timed runs on each build used 300,000 random gets, one thread, and a freshly seeded SSTable. Median throughput increased from 81,254 to 275,511 ops/s (3.39×). The median of the p99 latencies fell from 14.625 to 4.958 µs. The accelerated checksum accounted for 14.18% of samples. Raw runs and profiles are in `results/read-profile-{before,after}.csv` and `results/perf-{before,after}.txt`.
+
+To reproduce the baseline, build this phase with the `src/crc32c.cc` from `v0.3.0` in a separate checkout. Use `-DCMAKE_BUILD_TYPE=RelWithDebInfo` for both builds and run the same profiling script for each. On Colima the measurements used perf directly in the Linux VM. The script accepts the executable path in `STRATA_PERF` and can run perf with `STRATA_PERF_SUDO=1` while keeping the benchmark unprivileged.

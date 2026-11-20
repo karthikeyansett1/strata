@@ -1,0 +1,5 @@
+SIGKILL cycles: 500
+Random seed: 4831
+Sync modes: alternating always and batch
+Acknowledged writes verified after each restart and again at the end: 11546
+Acknowledged writes lost: 0

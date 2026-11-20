@@ -1,0 +1,76 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 395  of event 'cpu-clock:u'
+# Event count (approx.): 791583160
+#
+# Overhead  Command       Shared Object        Symbol
+# ........  ............  ...................  ...................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+    14.18%  strata_bench  strata_bench         [.] strata::(anonymous namespace)::Hardware(std::basic_string_view<char, std::char_traits<char> >)
+     5.82%  strata_bench  libc.so.6            [.] malloc
+     5.06%  strata_bench  strata_bench         [.] void std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry> > >::_M_realloc_insert<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry>(__gnu_cxx::__normal_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry>*, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry> > > >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&&, strata::Entry&&)
+     4.56%  strata_bench  strata_bench         [.] std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_mutate(unsigned long, unsigned long, char const*, unsigned long)
+     4.30%  strata_bench  strata_bench         [.] strata::SSTable::Get(std::basic_string_view<char, std::char_traits<char> >, std::optional<strata::Entry>*) const
+     4.05%  strata_bench  strata_bench         [.] std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace(unsigned long, unsigned long, char const*, unsigned long)
+     3.54%  strata_bench  libc.so.6            [.] memcmp
+     3.29%  strata_bench  libc.so.6            [.] cfree
+     2.28%  strata_bench  strata_bench         [.] strata::SSTable::ReadBlock(strata::disk::File const&, unsigned long, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry> > >*) const
+     2.03%  strata_bench  libstdc++.so.6.0.33  [.] free@plt
+     2.03%  strata_bench  libstdc++.so.6.0.33  [.] malloc@plt
+     1.77%  strata_bench  libc.so.6            [.] 0x0000000000094264
+     1.77%  strata_bench  libc.so.6            [.] 0x0000000000095480
+     1.77%  strata_bench  libc.so.6            [.] 0x0000000000095494
+     1.52%  strata_bench  libstdc++.so.6.0.33  [.] operator new(unsigned long)
+     1.27%  strata_bench  [vdso]               [.] 0x0000000000000508
+     1.27%  strata_bench  libc.so.6            [.] __libc_pread
+     1.27%  strata_bench  libc.so.6            [.] 0x0000000000094304
+     1.01%  strata_bench  libc.so.6            [.] open64
+     1.01%  strata_bench  libc.so.6            [.] pthread_rwlock_unlock
+     1.01%  strata_bench  libc.so.6            [.] 0x0000000000094de8
+     1.01%  strata_bench  strata_bench         [.] operator delete(void*)@plt
+     1.01%  strata_bench  strata_bench         [.] std::optional<strata::Entry> strata::SkipList<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry, std::less<void> >::Get<std::basic_string_view<char, std::char_traits<char> > >(std::basic_string_view<char, std::char_traits<char> > const&) const
+     0.76%  strata_bench  libc.so.6            [.] 0x0000000000092b3c
+     0.76%  strata_bench  libc.so.6            [.] 0x000000000009427c
+     0.76%  strata_bench  libc.so.6            [.] 0x00000000000942a0
+     0.76%  strata_bench  libc.so.6            [.] 0x00000000000942d4
+     0.76%  strata_bench  libc.so.6            [.] 0x000000000009436c
+     0.76%  strata_bench  libc.so.6            [.] 0x0000000000094444
+     0.76%  strata_bench  libc.so.6            [.] 0x0000000000094fdc
+     0.76%  strata_bench  libc.so.6            [.] 0x00000000000952ec
+     0.76%  strata_bench  libc.so.6            [.] 0x0000000000140798
+     0.76%  strata_bench  strata_bench         [.] char* std::_V2::__rotate<char*>(char*, char*, char*, std::random_access_iterator_tag)
+     0.76%  strata_bench  strata_bench         [.] operator new(unsigned long)@plt
+     0.51%  strata_bench  libc.so.6            [.] __close
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000092380
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000092a00
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000092a2c
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000092a6c
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000092b44
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000092b60
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000092b78
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000092bb8
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000092bfc
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000092c14
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000093ec8
+     0.51%  strata_bench  libc.so.6            [.] 0x00000000000942f4
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000094328
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000094db0
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000094e10
+     0.51%  strata_bench  libc.so.6            [.] 0x000000000009546c
+     0.51%  strata_bench  libc.so.6            [.] 0x000000000009548c
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000095580
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000095584
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000095758
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000095774
+     0.51%  strata_bench  libc.so.6            [.] 0x0000000000140988
+     0.51%  strata_bench  libstdc++.so.6.0.33  [.] std::chrono::_V2::steady_clock::now()
+     0.51%  strata_bench  strata_bench         [.] strata::DB::Get(std::basic_string_view<char, std::char_traits<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >*)
+     0.51%  strata_bench  strata_bench         [.] void std::__introsort_loop<__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, long, __gnu_cxx::__ops::_Iter_less_iter>(__gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, __gnu_cxx::__normal_iterator<unsigned long*, std::vector<unsigned long, std::allocator<unsigned long> > >, long, __gnu_cxx::__ops::_Iter_less_iter)
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#
