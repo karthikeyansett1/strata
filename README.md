@@ -21,3 +21,29 @@ build/strata_cli ./data del sample
 ```
 
 The CLI returns exit code 3 for a missing key. Successful writes are acknowledged after WAL sync. The C++ API supports per-write sync or group commit. The engine flushes memtables and compacts immutable SSTables in the background. On open, it loads the manifest and replays the referenced WALs. The API exposes `Flush()`, `CompactAll()`, and half-open `Scan(start, end)` ranges.
+
+## TCP server
+
+Start the Linux server with the build above.
+
+```sh
+build/strata_server --port 7379 --data-dir ./data --sync-mode batch --threads 4
+```
+
+Connect over TCP and send newline-terminated `PUT key value`, `GET key`, `DEL key`, `SCAN start end`, or `STATS` commands. Requests may be pipelined. `SCAN` and `STATS` finish with an `END` line.
+
+## Verification and measurements
+
+Build in Release mode before running the benchmark and crash harness on Linux.
+
+```sh
+cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release
+./scripts/run_bench.sh build-release/strata_bench 20000 results/bench.csv
+python3 scripts/plot_bench.py results/bench.csv
+./scripts/crash_torture.sh
+```
+
+Run the commands through `./scripts/dev.sh` on macOS. The container includes Matplotlib for the charts. See the [benchmark CSV](results/bench.csv), [throughput](results/throughput.png), [p99 latency](results/latency.png), and [crash-test summary](results/torture.log).
+
+The Phase 4 run covered 32 benchmark cases with 20,000 operations per case. On the eight-thread mixed workload, group commit delivered 37,540 ops/s at 610 µs p99, compared with 12,466 ops/s at 5,307 µs p99 in per-write sync mode. The crash run verified 11,546 acknowledged writes across 500 SIGKILL cycles and lost zero.

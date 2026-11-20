@@ -1,0 +1,26 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 1K of event 'cpu-clock:u'
+# Event count (approx.): 3364729432
+#
+# Overhead  Command       Shared Object          Symbol
+# ........  ............  .....................  ...................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+    78.68%  strata_bench  strata_bench           [.] strata::Crc32c(std::basic_string_view<char, std::char_traits<char> >)
+     1.37%  strata_bench  libc.so.6              [.] malloc
+     1.13%  strata_bench  strata_bench           [.] std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_mutate(unsigned long, unsigned long, char const*, unsigned long)
+     0.89%  strata_bench  libc.so.6              [.] cfree
+     0.89%  strata_bench  strata_bench           [.] strata::SSTable::Get(std::basic_string_view<char, std::char_traits<char> >, std::optional<strata::Entry>*) const
+     0.83%  strata_bench  strata_bench           [.] std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace(unsigned long, unsigned long, char const*, unsigned long)
+     0.83%  strata_bench  strata_bench           [.] strata::SSTable::ReadBlock(strata::disk::File const&, unsigned long, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry> > >*) const
+     0.66%  strata_bench  libc.so.6              [.] memcmp
+     0.60%  strata_bench  strata_bench           [.] void std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry> > >::_M_realloc_insert<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry>(__gnu_cxx::__normal_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry>*, std::vector<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry>, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, strata::Entry> > > >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&&, strata::Entry&&)
+     0.54%  strata_bench  libc.so.6              [.] 0x0000000000095494
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

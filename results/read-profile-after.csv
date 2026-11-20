@@ -1,0 +1,4 @@
+workload,threads,sync_mode,operations,ops_per_sec,p50_us,p99_us,p999_us
+readrandom,1,always,300000,275510.774,3.500,4.958,8.542
+readrandom,1,always,300000,271585.566,3.541,4.417,10.125
+readrandom,1,always,300000,276877.763,3.417,5.708,12.542
