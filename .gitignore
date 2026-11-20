@@ -1,0 +1,10 @@
+/build/
+/build-*/
+*.o
+compile_commands.json
+__pycache__/
+*.so
+.venv/
+/results/*.tmp
+/data/
+/.docker-build/
