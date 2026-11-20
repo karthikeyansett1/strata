@@ -14,7 +14,7 @@ Status Manifest::Load(const std::filesystem::path& directory) {
   if (!file.valid()) {
     return errno == ENOENT ? Status(StatusCode::kNotFound) : disk::Error("open manifest");
   }
-  std::uint64_t size;
+  std::uint64_t size = 0;
   if (auto status = file.Size(&size); !status.ok()) {
     return status;
   }

@@ -109,7 +109,7 @@ Status SSTable::Open(const std::filesystem::path& path, const TableMetadata& met
   if (!file.valid()) {
     return OpenError();
   }
-  std::uint64_t size;
+  std::uint64_t size = 0;
   if (auto status = file.Size(&size); !status.ok()) {
     return status;
   }
