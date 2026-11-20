@@ -47,3 +47,34 @@ python3 scripts/plot_bench.py results/bench.csv
 Run the commands through `./scripts/dev.sh` on macOS. The container includes Matplotlib for the charts. See the [benchmark CSV](results/bench.csv), [throughput](results/throughput.png), [p99 latency](results/latency.png), and [crash-test summary](results/torture.log).
 
 The Phase 4 run covered 32 benchmark cases with 20,000 operations per case. On the eight-thread mixed workload, group commit delivered 37,540 ops/s at 610 µs p99, compared with 12,466 ops/s at 5,307 µs p99 in per-write sync mode. The crash run verified 11,546 acknowledged writes across 500 SIGKILL cycles and lost zero.
+
+## Vector search and Python
+
+The TCP server also accepts `VPUT id 0.1,0.2,0.3` and `VSEARCH 5 0.1,0.2,0.3`. Vector results are returned in ascending distance order, followed by `END`. A database's vector dimension is fixed by its first vector.
+
+On Linux, build the Python extension with CMake and pybind11 or install the wheel from the source checkout with `python -m pip install .`. The import name is `strata`.
+
+```python
+from strata import DB
+
+db = DB("./data")
+db.put("doc/wal", "The WAL is synced before a write is acknowledged.")
+db.vput("wal", [0.0, 1.0, 0.0])
+print(db.vsearch([0.0, 1.0, 0.0], 1))
+```
+
+Use `raw=True` on `get`, `scan`, or `vsearch` for binary values or IDs. The Python constructor also accepts `metric`, `m`, `ef_construction`, and `ef_search` keyword arguments.
+
+Run the benchmark and the extractive retrieval demo using the Linux development wrapper on macOS.
+
+```sh
+cmake -S . -B build-python -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTRATA_BUILD_PYTHON=ON
+cmake --build build-python --target strata_python
+python3 -m venv build-vector-cache/venv
+build-vector-cache/venv/bin/pip install -r python/evaluation-requirements.txt
+build-vector-cache/venv/bin/python scripts/vector_data.py
+PYTHONPATH=build-python build-vector-cache/venv/bin/python scripts/vector_eval.py
+PYTHONPATH=build-python build-vector-cache/venv/bin/python python/examples/rag_demo.py
+```
+
+On the ARM64 Linux VM, 100,000 MiniLM vectors and 200 held-out queries produced 97.45% recall@10 and a 20.18× speedup over exact search at `ef_search=64`. [Vector evaluation CSV](results/vector_eval.csv)

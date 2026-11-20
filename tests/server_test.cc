@@ -100,13 +100,17 @@ class ServerTest : public testing::Test {
     Options options;
     options.sync_mode = SyncMode::kBatch;
     ASSERT_TRUE(DB::Open(options, directory_.path, &db_).ok());
+    ASSERT_TRUE(VectorStore::Open(options, {}, directory_.path, &vectors_).ok());
     auto future = ready_.get_future();
     server_ = std::jthread([this](std::stop_token stop) {
       bool started = false;
-      const auto result = Serve(*db_, 0, 8, stop, [&](std::uint16_t port) {
-        started = true;
-        ready_.set_value(port);
-      });
+      const auto result = Serve(
+          *db_, 0, 8, stop,
+          [&](std::uint16_t port) {
+            started = true;
+            ready_.set_value(port);
+          },
+          vectors_.get());
       if (!started) {
         ready_.set_value(0);
       }
@@ -118,6 +122,7 @@ class ServerTest : public testing::Test {
 
   test::TempDirectory directory_;
   std::unique_ptr<DB> db_;
+  std::unique_ptr<VectorStore> vectors_;
   std::promise<std::uint16_t> ready_;
   std::jthread server_;
   std::uint16_t port_ = 0;
@@ -142,6 +147,22 @@ TEST_F(ServerTest, Handles128ConcurrentMixedClientsWithOrderedReplies) {
       EXPECT_EQ(client.ReadLine(), "NOT_FOUND\n");
     });
   }
+}
+
+TEST_F(ServerTest, PipelinesVectorWritesAndSearchesInDistanceOrder) {
+  Client client(port_);
+  ASSERT_TRUE(client.connected());
+  ASSERT_TRUE(
+      client.Send("VPUT near 1,0\nVPUT far 0,1\nVSEARCH 2 4,0\n"
+                  "VPUT invalid 1,\nVSEARCH 0 1,0\nVSEARCH 1 1\n"));
+  EXPECT_EQ(client.ReadLine(), "OK\n");
+  EXPECT_EQ(client.ReadLine(), "OK\n");
+  EXPECT_EQ(client.ReadLine(), "near 0.000000\n");
+  EXPECT_EQ(client.ReadLine(), "far 1.000000\n");
+  EXPECT_EQ(client.ReadLine(), "END\n");
+  EXPECT_TRUE(client.ReadLine().starts_with("ERR "));
+  EXPECT_TRUE(client.ReadLine().starts_with("ERR "));
+  EXPECT_TRUE(client.ReadLine().starts_with("ERR "));
 }
 
 TEST_F(ServerTest, HandlesLargeRepliesHalfCloseAndDisconnectedClients) {

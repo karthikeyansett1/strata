@@ -1,0 +1,17 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.11"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "strata-engine"
+version = "0.5.0"
+description = "Python bindings for the Strata key-value and vector storage engine"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+dependencies = ["numpy>=1.24"]
+
+[tool.scikit-build]
+wheel.packages = []
+cmake.args = ["-DSTRATA_BUILD_PYTHON=ON", "-DBUILD_TESTING=OFF"]
+build.targets = ["strata_python"]

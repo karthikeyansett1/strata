@@ -47,7 +47,8 @@ struct Completion {
 
 class Loop {
  public:
-  Loop(DB& db, std::size_t threads) : db_(db), workers_(threads) {}
+  Loop(DB& db, std::size_t threads, VectorStore* vectors)
+      : db_(db), vectors_(vectors), workers_(threads) {}
 
   Status Run(std::uint16_t port, std::stop_token stop,
              const std::function<void(std::uint16_t)>& ready) {
@@ -141,7 +142,7 @@ class Loop {
     client.busy = workers_.Submit([this, id, line = std::move(*line)] {
       std::string response;
       try {
-        response = Execute(db_, line);
+        response = Execute(db_, line, vectors_);
       } catch (...) {
         response = "ERR request failed\n";
       }
@@ -237,6 +238,7 @@ class Loop {
   }
 
   DB& db_;
+  VectorStore* vectors_;
   disk::File listener_{socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0)};
   disk::File epoll_{epoll_create1(EPOLL_CLOEXEC)};
   disk::File wake_{eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC)};
@@ -251,8 +253,8 @@ class Loop {
 }  // namespace
 
 Status Serve(DB& db, std::uint16_t port, std::size_t threads, std::stop_token stop,
-             const std::function<void(std::uint16_t)>& ready) try {
-  return Loop(db, threads).Run(port, stop, ready);
+             const std::function<void(std::uint16_t)>& ready, VectorStore* vectors) try {
+  return Loop(db, threads, vectors).Run(port, stop, ready);
 } catch (...) {
   return {StatusCode::kIOError, "server event loop failed"};
 }

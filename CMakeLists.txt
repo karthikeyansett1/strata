@@ -12,7 +12,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Threads REQUIRED)
-add_library(strata STATIC src/crc32c.cc src/db.cc src/manifest.cc src/sstable.cc src/thread_pool.cc src/wal.cc)
+add_library(strata STATIC src/crc32c.cc src/db.cc src/manifest.cc src/sstable.cc src/thread_pool.cc src/wal.cc
+  src/vector/distance.cc src/vector/hnsw_index.cc src/vector/vector_store.cc)
+set_target_properties(strata PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(strata PRIVATE src)
 target_include_directories(strata PUBLIC include)
 target_link_libraries(strata PRIVATE Threads::Threads)
 target_compile_options(strata PRIVATE -Wall -Wextra -Werror)
@@ -46,6 +49,19 @@ target_include_directories(torture_client PRIVATE src)
 target_link_libraries(torture_client PRIVATE strata)
 target_compile_options(torture_client PRIVATE -Wall -Wextra -Werror)
 
+option(STRATA_BUILD_PYTHON "Build Python bindings" OFF)
+if(STRATA_BUILD_PYTHON)
+  set(PYBIND11_FINDPYTHON ON)
+  find_package(Python 3.10 REQUIRED COMPONENTS Interpreter Development.Module)
+  find_package(pybind11 CONFIG REQUIRED)
+  pybind11_add_module(strata_python python/bindings.cc)
+  set_target_properties(strata_python PROPERTIES OUTPUT_NAME strata)
+  target_include_directories(strata_python PRIVATE src)
+  target_link_libraries(strata_python PRIVATE strata Threads::Threads)
+  target_compile_options(strata_python PRIVATE -Wall -Wextra -Werror)
+  install(TARGETS strata_python LIBRARY DESTINATION .)
+endif()
+
 include(CTest)
 if(BUILD_TESTING)
   include(FetchContent)
@@ -66,6 +82,7 @@ if(BUILD_TESTING)
     tests/skiplist_test.cc
     tests/sstable_test.cc
     tests/thread_pool_test.cc
+    tests/vector_test.cc
     tests/wal_test.cc
   )
   target_include_directories(strata_test PRIVATE src)
