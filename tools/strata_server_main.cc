@@ -56,6 +56,11 @@ int main(int argc, char** argv) {
     std::cerr << "open database failed: " << status.message() << '\n';
     return 1;
   }
+  std::unique_ptr<strata::VectorStore> vectors;
+  if (const auto status = strata::VectorStore::Open(options, {}, data, &vectors); !status.ok()) {
+    std::cerr << "open vector store failed: " << status.message() << '\n';
+    return 1;
+  }
   std::stop_source stop;
   std::jthread signal_waiter([&](std::stop_token cancel) {
     while (!cancel.stop_requested()) {
@@ -68,7 +73,7 @@ int main(int argc, char** argv) {
   });
   const auto status = strata::server::Serve(
       *db, port, threads, stop.get_token(),
-      [](std::uint16_t bound) { std::cout << "LISTENING " << bound << std::endl; });
+      [](std::uint16_t bound) { std::cout << "LISTENING " << bound << std::endl; }, vectors.get());
   signal_waiter.request_stop();
   if (!status.ok()) {
     std::cerr << status.message() << '\n';

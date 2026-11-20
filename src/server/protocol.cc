@@ -1,5 +1,7 @@
 #include "protocol.h"
 
+#include <charconv>
+
 namespace strata::server {
 namespace {
 
@@ -17,6 +19,30 @@ std::pair<std::string_view, std::string_view> Split(std::string_view value) {
     return {value, {}};
   }
   return {value.substr(0, space), value.substr(space + 1)};
+}
+
+template <class Number>
+bool Parse(std::string_view text, Number* value) {
+  if (text.empty()) {
+    return false;
+  }
+  const auto parsed = std::from_chars(text.data(), text.data() + text.size(), *value);
+  return parsed.ec == std::errc{} && parsed.ptr == text.data() + text.size();
+}
+
+bool ParseVector(std::string_view text, std::vector<float>* values) {
+  while (true) {
+    const auto comma = text.find(',');
+    float value;
+    if (values->size() >= 4096 || !Parse(text.substr(0, comma), &value)) {
+      return false;
+    }
+    values->push_back(value);
+    if (comma == std::string_view::npos) {
+      return true;
+    }
+    text.remove_prefix(comma + 1);
+  }
 }
 
 std::string Reply(const Status& status) {
@@ -58,7 +84,7 @@ std::optional<std::string> Input::Next() {
   return line;
 }
 
-std::string Execute(DB& db, std::string_view line) {
+std::string Execute(DB& db, std::string_view line, VectorStore* vectors) {
   if (line.size() > kMaxLine || !Text(line)) {
     return "ERR malformed command\n";
   }
@@ -93,6 +119,30 @@ std::string Execute(DB& db, std::string_view line) {
           return "ERR scan response cannot be encoded\n";
         }
         response.append(key).append(" ").append(value).append("\n");
+      }
+      return response + "END\n";
+    }
+  } else if (vectors && (command == "VPUT" || command == "VSEARCH")) {
+    const auto [argument, coordinates] = Split(args);
+    std::vector<float> values;
+    if (!ParseVector(coordinates, &values)) {
+      return "ERR invalid vector\n";
+    }
+    if (command == "VPUT" && Key(argument)) {
+      return Reply(vectors->Put(argument, values));
+    }
+    std::size_t k = 0;
+    if (command == "VSEARCH" && Parse(argument, &k) && k > 0 && k <= 1000) {
+      std::vector<VectorHit> hits;
+      if (auto status = vectors->Search(values, k, &hits); !status.ok()) {
+        return Reply(status);
+      }
+      std::string response;
+      for (const auto& hit : hits) {
+        if (!Key(hit.id)) {
+          return "ERR vector id cannot be encoded\n";
+        }
+        response.append(hit.id).append(" ").append(std::to_string(hit.distance)).append("\n");
       }
       return response + "END\n";
     }

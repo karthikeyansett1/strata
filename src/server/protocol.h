@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include "strata/db.h"
+#include "strata/vector_store.h"
 
 namespace strata::server {
 
@@ -20,6 +21,6 @@ class Input {
   std::string buffer_;
 };
 
-std::string Execute(DB& db, std::string_view line);
+std::string Execute(DB& db, std::string_view line, VectorStore* vectors = nullptr);
 
 }  // namespace strata::server
