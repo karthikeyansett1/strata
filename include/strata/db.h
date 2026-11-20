@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -10,6 +11,13 @@
 #include "strata/status.h"
 
 namespace strata {
+
+struct Stats {
+  std::uint64_t sequence = 0;
+  std::uint64_t wal_syncs = 0;
+  std::uint64_t compactions = 0;
+  std::size_t sstable_count = 0;
+};
 
 class DB {
  private:
@@ -26,6 +34,8 @@ class DB {
   [[nodiscard]] Status Get(std::string_view key, std::string* value) noexcept;
   [[nodiscard]] Status Delete(std::string_view key) noexcept;
   [[nodiscard]] Status Flush() noexcept;
+  [[nodiscard]] Status CompactAll() noexcept;
+  [[nodiscard]] Stats GetStats() const noexcept;
   [[nodiscard]] Status Scan(std::string_view start, std::string_view end,
                             std::vector<std::pair<std::string, std::string>>* out) noexcept;
   ~DB();

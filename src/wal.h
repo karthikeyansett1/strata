@@ -25,9 +25,11 @@ class Wal {
   static std::string FileName(std::uint64_t start);
   Status Open(const std::string& path, std::uint64_t start = 1, bool create = true);
   Status RequireEmpty() const;
-  Status Recover(const Replay& replay, std::uint64_t* last_sequence);
+  Status Recover(const Replay& replay, std::uint64_t* last_sequence, bool allow_torn_tail = true);
   Status Append(std::string_view key, std::string_view value, RecordType type,
-                std::uint64_t sequence);
+                std::uint64_t sequence, bool sync = true);
+  Status SyncWrites() const;
+  static bool ValidSize(std::string_view key, std::string_view value);
 
  private:
   int fd_ = -1;

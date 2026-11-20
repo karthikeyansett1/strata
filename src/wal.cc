@@ -281,7 +281,7 @@ Status Wal::RequireEmpty() const {
   return Sync(fd_, "sync new WAL");
 }
 
-Status Wal::Recover(const Replay& replay, std::uint64_t* last_sequence) {
+Status Wal::Recover(const Replay& replay, std::uint64_t* last_sequence, bool allow_torn_tail) {
   struct stat info {};
   if (fstat(fd_, &info) != 0) {
     return IoError("stat WAL", errno);
@@ -347,6 +347,9 @@ Status Wal::Recover(const Replay& replay, std::uint64_t* last_sequence) {
   }
 
   if (offset != end) {
+    if (!allow_torn_tail) {
+      return Corruption(offset);
+    }
     while (ftruncate(fd_, static_cast<off_t>(offset)) != 0) {
       const int error = errno;
       if (error != EINTR) {
@@ -361,10 +364,16 @@ Status Wal::Recover(const Replay& replay, std::uint64_t* last_sequence) {
   return {};
 }
 
-Status Wal::Append(std::string_view key, std::string_view value, RecordType type,
-                   std::uint64_t sequence) {
+bool Wal::ValidSize(std::string_view key, std::string_view value) {
   constexpr auto kMaxDataBytes = kMaxBodyBytes - kFixedBodyBytes;
-  if (key.size() > kMaxDataBytes || value.size() > kMaxDataBytes - key.size()) {
+  return key.size() <= kMaxDataBytes && value.size() <= kMaxDataBytes - key.size();
+}
+
+Status Wal::SyncWrites() const { return Sync(fd_, "sync WAL"); }
+
+Status Wal::Append(std::string_view key, std::string_view value, RecordType type,
+                   std::uint64_t sequence, bool sync) {
+  if (!ValidSize(key, value)) {
     return {StatusCode::kInvalidArgument, "key and value exceed WAL record size limit"};
   }
 
@@ -394,7 +403,7 @@ Status Wal::Append(std::string_view key, std::string_view value, RecordType type
     }
     remaining.remove_prefix(written);
   }
-  return Sync(fd_, "sync WAL");
+  return sync ? SyncWrites() : Status{};
 }
 
 }  // namespace strata

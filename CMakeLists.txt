@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Threads REQUIRED)
-add_library(strata STATIC src/crc32c.cc src/db.cc src/manifest.cc src/sstable.cc src/wal.cc)
+add_library(strata STATIC src/crc32c.cc src/db.cc src/manifest.cc src/sstable.cc src/thread_pool.cc src/wal.cc)
 target_include_directories(strata PUBLIC include)
 target_link_libraries(strata PRIVATE Threads::Threads)
 target_compile_options(strata PRIVATE -Wall -Wextra -Werror)
@@ -38,17 +38,20 @@ if(BUILD_TESTING)
   )
   FetchContent_MakeAvailable(googletest)
   add_executable(strata_test
+    tests/compaction_test.cc
+    tests/concurrency_test.cc
     tests/crc32c_test.cc
     tests/db_test.cc
     tests/memtable_test.cc
     tests/recovery_test.cc
     tests/skiplist_test.cc
     tests/sstable_test.cc
+    tests/thread_pool_test.cc
     tests/wal_test.cc
   )
   target_include_directories(strata_test PRIVATE src)
   target_link_libraries(strata_test PRIVATE strata GTest::gtest_main)
   target_compile_options(strata_test PRIVATE -Wall -Wextra -Werror)
   add_test(NAME strata_test COMMAND strata_test)
-  set_tests_properties(strata_test PROPERTIES TIMEOUT 180)
+  set_tests_properties(strata_test PROPERTIES TIMEOUT 300)
 endif()

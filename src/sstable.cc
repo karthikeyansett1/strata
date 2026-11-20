@@ -244,6 +244,25 @@ Status SSTable::Get(std::string_view key, std::optional<Entry>* out) const {
   return {};
 }
 
+Status SSTable::ReadAll(Rows* out) const {
+  auto file = OpenTable(path_);
+  if (!file.valid()) {
+    return OpenError();
+  }
+  Rows block;
+  for (std::size_t index = 0; index < blocks_.size(); ++index) {
+    if (auto status = ReadBlock(file, index, &block); !status.ok()) {
+      return status;
+    }
+    out->insert(out->end(), std::make_move_iterator(block.begin()),
+                std::make_move_iterator(block.end()));
+  }
+  if (out->size() != entry_count_) {
+    return disk::Corruption("SSTable entry count mismatch");
+  }
+  return {};
+}
+
 Status SSTable::ReadRange(std::string_view start, std::string_view end, Rows* out) const {
   auto index = FindBlock(start);
   if (index == blocks_.size() || end <= smallest_) {

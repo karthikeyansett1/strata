@@ -48,3 +48,27 @@ Flush installs the SSTable with file sync, rename, and directory sync. It then c
 The directory advisory lock stays held through WAL rotation. The existing per-WAL lock also remains. The writer mutex protects WAL I/O, sequences, and rotation accounting. The view mutex protects the visible memtable and table list. Writers take the writer mutex first, then the view mutex while publishing or flushing. Readers take the view mutex in shared mode and can proceed during ordinary WAL sync, but synchronous flush blocks reads. Scans hold a stable view, read the overlapping SSTable blocks, and heap-merge the sorted range results by key and sequence. The newest tombstone suppresses older values.
 
 Options require a positive rotation budget, block targets up to 64 MiB, and 1 through 64 Bloom bits per key. SSTable index, Bloom, and manifest sections are capped at 256 MiB each.
+
+## Phase 3 versions, maintenance, and group commit
+
+### Durable WAL rotation
+
+Manifest v2 adds a second 64-bit WAL start field after the original WAL start. A zero second start means only one WAL is live. With two live WALs, the first belongs to the immutable memtable and the second to the active memtable. The flushed sequence still equals the first WAL start minus one. The reader accepts existing v1 manifests and the manifest-free Phase 1 layout. The next manifest replacement upgrades the file to v2. WAL and SSTable bytes are unchanged.
+
+A writer syncs the empty replacement WAL and commits the two-WAL manifest before accepting writes in the new generation. The worker writes and syncs the immutable memtable's SSTable while foreground writes continue. The worker then atomically replaces the manifest, advancing the flushed sequence and leaving the active WAL as the sole live WAL. It unlinks the immutable WAL after that replacement is durable. Recovery before rotation follows the original WAL. Recovery after rotation replays both WALs and resumes the pending flush. The immutable WAL must end exactly at the sequence before the new WAL starts, and only the active WAL may have a torn tail.
+
+The database keeps at most one active and one immutable memtable. A writer with a full active memtable waits for the immutable slot to clear. `Flush()` waits for all writes published by the time it captures its target sequence. On clean shutdown the caller stops invoking the API, the DB flushes its active memtable, and the pool drains and joins. If maintenance or syncing fails, the DB rejects further writes and keeps its durable files available for recovery after reopening.
+
+### Compaction and snapshots
+
+After the L0 threshold is reached, maintenance merges every live SSTable into one L1 table. This bounds table count and lets the merge discard tombstones because no older table remains. An all-tombstone result has no output table. Compaction preserves any active or immutable memtable and its WAL. `CompactAll()` flushes its captured frontier and waits for a compaction pass. The worker prioritizes a pending immutable flush. Each DB serializes maintenance jobs through one pool task to keep file-number allocation and manifest installation ordered.
+
+Compaction installs a new Version only after its manifest is durable. Readers retain their Version through SSTable I/O. Versions share table handles, so marking a table obsolete defers unlink until the last referencing version is released. A crash can leave unreferenced files on disk. Recovery loads only referenced files. Builds and merges use in-memory sorted rows.
+
+### Locks and publication
+
+The directory advisory lock excludes other database handles throughout rotation. The WAL also retains its advisory file lock while open. The writer mutex owns the request queue, sequence allocation, WAL I/O, manifest updates, maintenance state, and statistics. Its condition variable coordinates group leaders and followers, flush completion, compaction completion, and rotation backpressure. The view mutex protects Version publication and the active memtable's batch visibility. A memtable's skiplist shared mutex protects its nodes and height generator. The global order when locks are held together is writer, view, then skiplist. Maintenance releases the writer mutex before copying immutable rows or doing table build and merge I/O. Point reads obtain the active entry with the Version under the view lock and release it before checking immutable data or tables. Scans copy active rows at that same boundary.
+
+The pool mutex protects its queue and stop flag. Workers release it before running tasks. The owner-only shutdown path uses a once flag and joins with no DB or pool mutex held. An atomic obsolete flag on each table handle is set only after a successful manifest install.
+
+The queue uses FIFO leadership. `kAlways` serves one request per WAL sync. In `kBatch`, the leader waits up to 150 microseconds to gather requests and appends up to 32 records within the current rotation budget, allowing one oversized record. A single sync covers the group. On success the leader publishes the records in sequence order under the view lock before waking the callers. An append or sync failure fails queued callers and prevents further writes. A durable prefix can be replayed after an unacknowledged batch. The per-handle statistics count write syncs and compactions for testing and diagnostics.
